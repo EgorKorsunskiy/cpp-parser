@@ -16,7 +16,7 @@ class PrattParser:
         self.prefixParseFnc[TokenTypes.NOT] = self.parsePrefixExpr
         self.prefixParseFnc[TokenTypes.IDENT] = self.parsePrefixExpr
         self.prefixParseFnc[TokenTypes.LPAREN] = self.parseGroupedExpr
-        self.prefixParseFnc[TokenTypes.CALL] = self.parseCallExpr
+        self.prefixParseFnc[TokenTypes.FN] = self.parseCallExpr
 
         self.infixParseFnc[TokenTypes.PLUS] = self.parseInfixExpr
         self.infixParseFnc[TokenTypes.MIN] = self.parseInfixExpr

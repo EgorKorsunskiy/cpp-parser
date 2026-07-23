@@ -14,13 +14,9 @@ class Lexer:
             if i-1<=last_insert_index:
                 continue
             token_couple = f'{tokens[i-1]["token_type"]}_{tokens[i]["token_type"]}'
-            token_couple_reversed = f'{tokens[i]["token_type"]}_{tokens[i-1]["token_type"]}'
             token_to_insert = None
             if token_couple in merge_rules:
                 token_to_insert = merge_rules[token_couple]
-                last_insert_index = i
-            elif token_couple_reversed in merge_rules:
-                token_to_insert = merge_rules[token_couple_reversed]
                 last_insert_index = i
             else:
                 token_to_insert = tokens[i-1]
@@ -49,6 +45,8 @@ class Lexer:
                     current_word = ""
             if token_to_insert != None:
                 tokens.append(token_to_insert)
+        if current_word:
+            tokens.append(self.get_token_based_on_word(current_word))
         tokens.append({"token_type": TokenTypes.EOF})
         return tokens
 

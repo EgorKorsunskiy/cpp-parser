@@ -40,7 +40,7 @@ class TokenTypes(Enum):
     # internal tokens
     PARSE_BREAK = auto()
     EOF = auto()
-    CALL = auto()
+    FN = auto()
 
 string_to_token_map = {
     "for": {"token_type": TokenTypes.FOR},
@@ -80,6 +80,6 @@ merge_rules = {
     f'{TokenTypes.NOT}_{TokenTypes.ASSIGN}': {"token_type": TokenTypes.NEQ},
     f'{TokenTypes.PLUS}_{TokenTypes.PLUS}': {"token_type": TokenTypes.INC},
     f'{TokenTypes.MIN}_{TokenTypes.MIN}': {"token_type": TokenTypes.DEC},
-    f'{TokenTypes.IF}_{TokenTypes.ELSE}': {"token_type": TokenTypes.ELIF},
-    f'{TokenTypes.IDENT}_{TokenTypes.LBRACE}': {"token_type": TokenTypes.CALL},
+    f'{TokenTypes.ELSE}_{TokenTypes.IF}': {"token_type": TokenTypes.ELIF},
+    f'{TokenTypes.IDENT}_{TokenTypes.LPAREN}': {"token_type": TokenTypes.FN},
 }
