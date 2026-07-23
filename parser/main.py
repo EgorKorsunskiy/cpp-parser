@@ -1,0 +1,204 @@
+from lexer.token_lists import TokenTypes
+from parser.ast_entities import ConditionStmt, FuncStatement, IfStmt, InitStmt, LoopStmt, ProgrammeNode
+from parser.expression_parser import LOWEST, PrattParser
+from utils.main import getTokenType
+
+class ExpectedError(Exception):
+    def __init__(self, token) -> None:
+        self.message = f"Expected {token}"
+        super().__init__(self.message)
+
+class Parser:
+    def __init__(self) -> None:
+        self.prattParser = PrattParser()
+        self.tokens = []
+        self.cursor = 0
+
+    def tokens_left(self):
+        return self.cursor < len(self.tokens)
+
+    def pick(self):
+        return self.tokens[self.cursor]
+    
+    def peekN(self, n):
+        # returns nth lookahead token, if it exists
+        if self.cursor + n < len(self.tokens):
+            return self.tokens[self.cursor+n]
+
+    def next(self, n=1):
+        self.cursor += n
+        if not self.tokens_left():
+            raise Exception("Tried to access token outside of the range")
+    
+    def expect(self, tok):
+        if getTokenType(self.pick()) != tok:
+            raise ExpectedError(tok)
+
+    def indicateBody(self):
+        #inserts special PARSE_BREAK before the end of a current body
+        bracesCnt = 0
+        i = 0
+        #TODO: quite dangerous statement :). Probably need to be changed 
+        while True:
+            if getTokenType(self.peekN(i)) == TokenTypes.LBRACE:
+                bracesCnt += 1
+            elif getTokenType(self.peekN(i)) == TokenTypes.RBRACE:
+                bracesCnt -= 1
+            if bracesCnt < 0:
+                break
+            i += 1
+        self.tokens.insert(self.cursor+i, {"token_type": TokenTypes.PARSE_BREAK})
+    
+    def parseBody(self):
+        bodyStmts = []
+        while getTokenType(self.pick()) != TokenTypes.PARSE_BREAK:
+            stmt = self.parseStmt()
+
+            if stmt != None:
+                bodyStmts.append(stmt)
+        self.next() # skip PARSE_BREAK
+        self.next() # skip closing RBRACE
+        return bodyStmts
+
+    def parseInitLeftSide(self):
+        #TODO: add support for pointers && probably different flow for func args
+        initTypeTok = self.pick()
+        self.next()
+        self.expect(TokenTypes.IDENT)
+        initNameTok = self.pick()
+
+        initNode = InitStmt()
+        initNode.type = initTypeTok
+        initNode.name = initNameTok
+        return InitStmt
+
+    def parseInitStmt(self):
+        initNode = self.parseInitLeftSide()
+        self.next()
+        self.expect(TokenTypes.ASSIGN)
+        self.next()
+        expr = []
+        while getTokenType(self.pick()) != TokenTypes.SEMICOL:
+            expr.append(self.pick())
+            self.next()
+        self.next()
+        self.prattParser.setExpr(expr)
+        exprAST = self.prattParser.parseExpr(LOWEST)
+        initNode.value = exprAST
+        return initNode
+
+    def parseFuncDeclarationStmt(self):
+        funcStmt = FuncStatement()
+        funcStmt.type = self.pick()
+        self.next()
+        self.expect(TokenTypes.IDENT)
+        funcStmt.name = self.pick()
+        self.next()
+        self.expect(TokenTypes.LPAREN)
+        self.next()
+        args = []
+        while getTokenType(self.pick()) != TokenTypes.RPAREN:
+            if getTokenType(self.pick()) == TokenTypes.COMMA:
+                continue
+            argNode = self.parseInitLeftSide()
+            args.append(argNode)
+            self.next()
+        self.next()
+        self.expect(TokenTypes.LBRACE)
+        self.indicateBody()
+        bodyStmts = self.parseBody()
+
+        funcStmt.args = args
+        funcStmt.body = bodyStmts
+        return funcStmt
+
+    def parseWhileStmt(self):
+        self.next()
+        self.expect(TokenTypes.LPAREN)
+        self.next()
+        expr = []
+        while getTokenType(self.pick()) != TokenTypes.RPAREN:
+            expr.append(self.pick())
+            self.next()
+        self.prattParser.setExpr(expr)
+        exprAST = self.prattParser.parseExpr(LOWEST)
+        self.next()
+        self.expect(TokenTypes.LBRACE)
+        self.next()
+        self.indicateBody()
+        bodyStmts = self.parseBody()
+        loopNode = LoopStmt()
+        loopNode.condition = exprAST
+        loopNode.body = bodyStmts
+        return loopNode
+    
+    def parseConditionStmt(self):
+        self.next()
+        self.expect(TokenTypes.LPAREN)
+        self.next()
+        expr = []
+        while getTokenType(self.pick()) != TokenTypes.RPAREN:
+            expr.append(self.pick())
+            self.next()
+        self.prattParser.setExpr(expr)
+        exprAST = self.prattParser.parseExpr(LOWEST)
+        self.next()
+        self.expect(TokenTypes.LBRACE)
+        self.next()
+        self.indicateBody()
+        thenBodyStmts = self.parseBody()
+        conditionStmt = ConditionStmt()
+        conditionStmt.condition = exprAST
+        conditionStmt.thenBody = thenBodyStmts
+        return conditionStmt
+
+    def parseIfStmt(self):
+        conditionStmt = self.parseConditionStmt()
+        alterntatives = []
+        rejectBody = []
+
+        while getTokenType(self.pick()) == TokenTypes.ELIF:
+            alterntatives.append(self.parseConditionStmt())
+        if getTokenType(self.pick()) == TokenTypes.ELSE:
+            self.next()
+            self.expect(TokenTypes.LBRACE)
+            self.next()
+            self.indicateBody()
+            rejectBody = self.parseBody()
+
+        ifStmt = IfStmt()
+        ifStmt.condition = conditionStmt.condition
+        ifStmt.thenBody = conditionStmt.thenBody
+        ifStmt.alternatives = alterntatives
+        ifStmt.rejectBody = rejectBody
+        return ifStmt
+
+
+    def parseStmt(self):
+        match getTokenType(self.pick()):
+            case TokenTypes.TYPE:
+                if getTokenType(self.peekN(2)) == TokenTypes.ASSIGN:
+                    return self.parseInitStmt()
+                elif getTokenType(self.peekN(2) == TokenTypes.LPAREN):
+                    return self.parseFuncDeclarationStmt
+            case TokenTypes.FOR:
+                pass
+            case TokenTypes.WHILE:
+                return self.parseWhileStmt()
+            case TokenTypes.IF:
+                return self.parseIfStmt()
+            case TokenTypes.PARSE_BREAK:
+                return
+            case _:
+                pass
+
+    def parse(self, tokens) -> ProgrammeNode:
+        self.tokens = tokens
+        head_node = ProgrammeNode()
+
+        while self.tokens_left() and getTokenType(self.pick()) != TokenTypes.EOF:
+            stmt = self.parseStmt()
+            if stmt != None:
+                head_node.stmts.append(stmt)
+        
+        return head_node
